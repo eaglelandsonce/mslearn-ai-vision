@@ -2,26 +2,40 @@ import os
 import json
 
 # Add references
+from dotenv import load_dotenv
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import AzureOpenAI
+import requests
 
 
-def main(): 
+def main():
 
     # Clear the console
     os.system('cls' if os.name=='nt' else 'clear')
-        
-    try: 
-    
-        # Get configuration settings 
+
+    try:
+
+        # Get configuration settings
         load_dotenv()
         endpoint = os.getenv("ENDPOINT")
         model_deployment =  os.getenv("MODEL_DEPLOYMENT")
         api_version = os.getenv("API_VERSION")
-        
-        # Initialize the client
-        
-        
 
-         
+        # Initialize the client
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(
+                exclude_environment_credential=True,
+                exclude_managed_identity_credential=True
+            ),
+            "https://cognitiveservices.azure.com/.default"
+        )
+
+        client = AzureOpenAI(
+            api_version=api_version,
+            azure_endpoint=endpoint,
+            azure_ad_token_provider=token_provider
+        )
+
         img_no = 0
         # Loop until the user types 'quit'
         while True:
@@ -32,20 +46,27 @@ def main():
             if len(input_text) == 0:
                 print("Please enter a prompt.")
                 continue
-            
+
             # Generate an image
-            
+            result = client.images.generate(
+                model=model_deployment,
+                prompt=input_text,
+                n=1
+            )
+
+            json_response = json.loads(result.model_dump_json())
+            image_url = json_response["data"][0]["url"]
 
             # save the image
             img_no += 1
             file_name = f"image_{img_no}.png"
-            save_image (image_url, file_name)
-
+            save_image(image_url, file_name)
 
     except Exception as ex:
         print(ex)
 
-def save_image (image_url, file_name):
+
+def save_image(image_url, file_name):
     # Set the directory for the stored image
     image_dir = os.path.join(os.getcwd(), 'images')
 
@@ -60,8 +81,8 @@ def save_image (image_url, file_name):
     generated_image = requests.get(image_url).content  # download the image
     with open(image_path, "wb") as image_file:
         image_file.write(generated_image)
-    print (f"Image saved as {image_path}")
+    print(f"Image saved as {image_path}")
 
 
-if __name__ == '__main__': 
+if __name__ == '__main__':
     main()
